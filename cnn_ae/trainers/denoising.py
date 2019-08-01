@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from cnn_ae.utils.noise import noise_char_input
 
 
 class DenoisingCNN(object):
@@ -15,7 +16,7 @@ class DenoisingCNN(object):
         self.model_filename = model_filename
         self.device = device
 
-    def train(self):
+    def train(self, end_epoch_callback=None):
         best = float('-inf')
         for epoch in range(self.max_epoch):
             epoch_train_loss = 0.
@@ -24,7 +25,8 @@ class DenoisingCNN(object):
             for batch in self.train_iter:
                 self.optimizer.zero_grad()
                 input_data = batch.text.permute(1, 0)
-                output = self.model(input_data)
+                noised_input_data = noise_char_input(input_data, 0.0)
+                output = self.model(noised_input_data)
                 loss = self.criterion(output.view(-1, output.shape[-1]), input_data.contiguous().view(-1))
                 loss.backward()
                 self.optimizer.step()
@@ -36,6 +38,9 @@ class DenoisingCNN(object):
                 output = self.model(input_data)
                 loss = self.criterion(output.view(-1, output.shape[-1]), input_data.contiguous().view(-1))
                 epoch_test_loss += loss.item()
+
+            if end_epoch_callback:
+                end_epoch_callback(self.model)
 
             epoch_train_loss = epoch_train_loss/len(self.train_iter)
             epoch_test_loss = epoch_test_loss / len(self.test_iter)
