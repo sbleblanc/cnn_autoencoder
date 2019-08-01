@@ -26,7 +26,7 @@ if params.mode == 'train':
     if params.manual_examples:
         with open(params.manual_examples, 'r') as in_file:
             sentences = [line.strip() for line in in_file]
-        callback = ManualTestingCallback(ds, sentences)
+        callback = ManualTestingCallback(ds, sentences, device)
     else:
         callback = None
 
