@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 import os
-from cnn_ae.models.denoising import CNNEncoder, CNNDecoder, CNNAE, DownsamplingCNNEncoder, UpsamplingCNNDecoder
+from cnn_ae.models.denoising import CNNEncoder, CNNDecoder, CNNAE, DeepDSCNNEncoder, UpsamplingCNNDecoder
 from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
@@ -37,7 +37,7 @@ if params.mode == 'train':
     train_iterator = BucketIterator(train, 64, sort_key=lambda x: len(x.text), device=device)
     test_iterator = BucketIterator(test, 64, sort_key=lambda x: len(x.text), device=device)
 
-    enc = DownsamplingCNNEncoder(len(ds.fields['text'].vocab), 300)
+    enc = DeepDSCNNEncoder(len(ds.fields['text'].vocab), 300, num_inner_conv=2)
     dec = UpsamplingCNNDecoder(len(ds.fields['text'].vocab), 300, 1024, 3)
     model = CNNAE(enc, dec).to(device)
     if params.load_from == 'best':
