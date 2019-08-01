@@ -53,10 +53,9 @@ class DownsamplingCNNEncoder(nn.Module):
 
 class UpsamplingCNNDecoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, hid_size, in_channels, kernel_size=3):
+    def __init__(self, vocab_size, emb_size, hid_size, kernel_size=3):
         super(UpsamplingCNNDecoder, self).__init__()
         self.vocab_size = vocab_size
-        self.in_channels = in_channels
         self.kernel_size = kernel_size
 
         self.outer_cnn = nn.Sequential(
@@ -78,7 +77,9 @@ class UpsamplingCNNDecoder(nn.Module):
 
         self.lin = nn.Sequential(
             nn.Linear(emb_size, hid_size),
+            nn.Dropout(),
             nn.Linear(hid_size, hid_size),
+            nn.Dropout(),
             nn.Linear(hid_size, vocab_size)
         )
 
