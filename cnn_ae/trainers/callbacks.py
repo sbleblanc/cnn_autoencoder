@@ -8,6 +8,7 @@ class ManualTestingCallback(object):
     def __call__(self, model):
         output = model(self.test_tensor).softmax(dim=2).argmax(dim=2).permute(1, 0)
         strings = self.dataset.batch_to_strings(output)
-        print('Manual decoding results: ')
+        print('\nManual decoding results: ')
         for i, s in enumerate(strings):
             print('{} -> {}'.format(self.test_strings[i], s))
+        print()

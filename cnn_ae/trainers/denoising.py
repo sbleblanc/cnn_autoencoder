@@ -17,7 +17,7 @@ class DenoisingCNN(object):
         self.device = device
 
     def train(self, end_epoch_callback=None):
-        best = float('-inf')
+        best = float('inf')
         for epoch in range(self.max_epoch):
             epoch_train_loss = 0.
             epoch_test_loss = 0.
@@ -45,7 +45,7 @@ class DenoisingCNN(object):
             epoch_train_loss = epoch_train_loss/len(self.train_iter)
             epoch_test_loss = epoch_test_loss / len(self.test_iter)
 
-            if epoch_test_loss > best:
+            if epoch_test_loss < best:
                 best = epoch_test_loss
                 torch.save(self.model.state_dict(), self.model_filename)
                 print('Saved best model in {}'.format(self.model_filename))

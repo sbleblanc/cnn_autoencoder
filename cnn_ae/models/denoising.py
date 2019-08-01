@@ -6,12 +6,11 @@ import torch.nn.functional as F
 
 class DownsamplingCNNEncoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, kernel_size=3, out_channels=64):
+    def __init__(self, vocab_size, emb_size, kernel_size=3):
         super(DownsamplingCNNEncoder, self).__init__()
         self.vocab_size = vocab_size
         self.emb_size = emb_size
         self.kernel_size = kernel_size
-        self.out_channels = out_channels
 
         self.emb = nn.Embedding(vocab_size, emb_size)
         self.outer_cnn = nn.Sequential(
@@ -54,12 +53,11 @@ class DownsamplingCNNEncoder(nn.Module):
 
 class UpsamplingCNNDecoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, hid_size, in_channels, kernel_size=3, out_channels=64):
+    def __init__(self, vocab_size, emb_size, hid_size, in_channels, kernel_size=3):
         super(UpsamplingCNNDecoder, self).__init__()
         self.vocab_size = vocab_size
         self.in_channels = in_channels
         self.kernel_size = kernel_size
-        self.out_channels = out_channels
 
         self.outer_cnn = nn.Sequential(
             nn.Conv1d(emb_size* 2, emb_size * 2, kernel_size, padding=(kernel_size - 1) // 2),
@@ -78,24 +76,6 @@ class UpsamplingCNNDecoder(nn.Module):
             nn.BatchNorm1d(emb_size)
         )
 
-
-        self.cnn = nn.Sequential(
-            nn.ConvTranspose1d(in_channels, out_channels, kernel_size=2, stride=2),
-            nn.Conv1d(out_channels, out_channels, kernel_size, padding=(kernel_size-1)//2),
-            nn.ReLU(),
-            nn.BatchNorm1d(out_channels),
-            nn.Conv1d(out_channels, out_channels, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(out_channels),
-            nn.ConvTranspose1d(out_channels, out_channels, kernel_size=2, stride=2),
-            nn.Conv1d(out_channels, out_channels, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(out_channels),
-            nn.Conv1d(out_channels, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_size),
-        )
-
         self.lin = nn.Sequential(
             nn.Linear(emb_size, hid_size),
             nn.Linear(hid_size, hid_size),
@@ -112,10 +92,6 @@ class UpsamplingCNNDecoder(nn.Module):
         output = self.lin(output)
 
         return output
-
-        # output = self.cnn(input).permute(0, 2, 1)
-        # output = F.softmax(self.lin(output), 2)
-        # return output
 
 
 class DeepCNNEncoder(nn.Module):

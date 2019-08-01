@@ -7,13 +7,13 @@ def tokenize(text):
 
 class AutoencodingDataset(Dataset):
 
-    def __init__(self, dataset_fn, top_k, **kwargs):
+    def __init__(self, dataset_fn, top_k=None, **kwargs):
         fields = [('text', Field(sequential=True, use_vocab=True, tokenize=tokenize))]
         examples = []
         counter = 0
         with open(dataset_fn, 'r') as in_file:
             for line in in_file:
-                if counter >= top_k:
+                if top_k and counter >= top_k:
                     break
                 examples.append(Example.fromlist([line.strip()], fields))
                 counter += 1
