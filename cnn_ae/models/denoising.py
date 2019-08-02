@@ -2,39 +2,30 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import cnn_ae.utils.factory as factory
+from cnn_ae.common.exceptions import InconsistentPoolingLayersException
 
 
 class DeepDSCNNEncoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, num_maps_initial=200, kernel_size=3, num_inner_conv=1):
-        super(DownsamplingCNNEncoder, self).__init__()
+    def __init__(self, vocab_size, emb_size, layers_kcn, pooling_ks):
+        super(DeepDSCNNEncoder, self).__init__()
+
+        if len(layers_kcn) != len(pooling_ks):
+            raise InconsistentPoolingLayersException("Expected {} pooling parameters".format(len(layers_kcn)))
+
         self.vocab_size = vocab_size
         self.emb_size = emb_size
-        self.kernel_size = kernel_size
-        self.num_maps_initial = num_maps_initial
+        self.pooling_ks = pooling_ks
 
         self.emb = nn.Embedding(vocab_size, emb_size)
-        self.outer_cnn = nn.Sequential(
-            nn.Conv1d(emb_size, num_maps_initial, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.BatchNorm1d(num_maps_initial),
-            nn.ReLU(),
-            nn.Conv1d(num_maps_initial, num_maps_initial, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.BatchNorm1d(num_maps_initial),
-            nn.ReLU(),
-        )
-        self.inner_cnns = nn.ModuleList()
 
-        for i in range(num_inner_conv):
-            inner_cnn = nn.Sequential(
-                nn.Conv1d(num_maps_initial * (i * 2), num_maps_initial * ((i+1) * 2), kernel_size, padding=(kernel_size - 1) // 2),
-                nn.ReLU(),
-                nn.BatchNorm1d(num_maps_initial * ((i+1) * 2)),
-                nn.Conv1d(num_maps_initial * ((i+1) * 2), num_maps_initial * ((i+1) * 2), kernel_size, padding=(kernel_size - 1) // 2),
-                nn.ReLU(),
-                nn.BatchNorm1d(num_maps_initial * ((i+1) * 2))
-            )
-            self.inner_cnns.append(inner_cnn)
-
+        self.cnn_blocks = nn.ModuleList()
+        for i, (kernel_size, channels, n) in enumerate(layers_kcn):
+            if i == 0:
+                self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channels, n, kernel_size))
+            else:
+                self.cnn_blocks.append(factory.build_cnn1d_block(layers_kcn[i-1][1], channels, n, kernel_size))
 
     def forward(self, input):
         size_history = []
@@ -42,51 +33,71 @@ class DeepDSCNNEncoder(nn.Module):
         kernel_history = []
         embedded = self.emb(input).permute(0, 2, 1)
 
-        size_history.append(embedded.size())
-        output = self.outer_cnn(embedded)
-        kernel_history.append(2)
-        output, indices = F.max_pool1d(output, kernel_size=2, stride=2, return_indices=True)
-        indices_history.append(indices)
+        for i, cnn in enumerate(self.cnn_blocks):
+            if i == 0:
+                size_history.append(embedded.size())
+                cnn_input = embedded
+            else:
+                size_history.append(output.size())
+                cnn_input = output
+            output = cnn(cnn_input)
+            if self.pooling_ks[i][0] == -1:
+                pooling_kernel_size = output.shape[-1]
+            else:
+                pooling_kernel_size = self.pooling_ks[i][0]
 
-        for cnn in self.inner_cnns[:-1]:
-            size_history.append(output.size())
-            output = cnn(output)
-            kernel_history.append(output.shape[-1])
-            output, indices = F.max_pool1d(output, kernel_size=2, stride=2, return_indices=True)
+            kernel_history.append(pooling_kernel_size)
+            output, indices = F.max_pool1d(output, kernel_size=pooling_kernel_size, stride=self.pooling_ks[i][1],
+                                           return_indices=True)
             indices_history.append(indices)
-
-        size_history.append(output.size())
-        output = self.inner_cnns[-1](output)
-        kernel_history.append(output.shape[-1])
-        output, indices = F.max_pool1d(output, kernel_size=output.shape[-1], return_indices=True)
-        indices_history.append(indices)
 
         return output, size_history, indices_history, kernel_history
 
 
 class DeepUSCNNDecoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, hid_size, num_maps_initial=200, kernel_size=3, num_inner_conv=1):
-        super(UpsamplingCNNDecoder, self).__init__()
-        self.vocab_size = vocab_size
-        self.kernel_size = kernel_size
+    def __init__(self, vocab_size, emb_size, hid_size, layers_kcn):
+        super(DeepUSCNNDecoder, self).__init__()
 
-        self.outer_cnn = nn.Sequential(
-            nn.Conv1d(emb_size* 2, emb_size * 2, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_size * 2),
-            nn.Conv1d(emb_size * 2, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_size)
-        )
-        self.inner_cnn = nn.Sequential(
-            nn.Conv1d(emb_size, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_size),
-            nn.Conv1d(emb_size, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
-            nn.ReLU(),
-            nn.BatchNorm1d(emb_size)
-        )
+        self.vocab_size = vocab_size
+        self.emb_size = emb_size
+
+        self.cnn_blocks = nn.ModuleList()
+        for i in range(len(layers_kcn)):
+            if i < len(layers_kcn) - 1:
+                self.cnn_blocks.append(
+                    factory.build_cnn1d_block(layers_kcn[i][1],
+                                              layers_kcn[i+1][1],
+                                              layers_kcn[i][2],
+                                              layers_kcn[i][0], forward=False))
+            else:
+                self.cnn_blocks.append(
+                    factory.build_cnn1d_block(layers_kcn[i][1],
+                                              emb_size,
+                                              layers_kcn[i][2],
+                                              layers_kcn[i][0], forward=False))
+        # for i, (kernel_size, channels, n) in enumerate(layers_kcn):
+        #     if i == 0:
+        #         self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channels, n, kernel_size, forward=False))
+        #     else:
+        #         self.cnn_blocks.append(factory.build_cnn1d_block(layers_kcn[i - 1][1], channels, n, kernel_size , forward=False))
+        #
+        # self.outer_cnn = nn.Sequential(
+        #     nn.Conv1d(emb_size* 2, emb_size * 2, kernel_size, padding=(kernel_size - 1) // 2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_size * 2),
+        #     nn.Conv1d(emb_size * 2, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_size)
+        # )
+        # self.inner_cnn = nn.Sequential(
+        #     nn.Conv1d(emb_size, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_size),
+        #     nn.Conv1d(emb_size, emb_size, kernel_size, padding=(kernel_size - 1) // 2),
+        #     nn.ReLU(),
+        #     nn.BatchNorm1d(emb_size)
+        # )
 
         self.lin = nn.Sequential(
             nn.Linear(emb_size, hid_size),
@@ -98,12 +109,12 @@ class DeepUSCNNDecoder(nn.Module):
 
     def forward(self, input, size_history, indices_history, kernel_history):
 
-        output = F.max_unpool1d(input, indices_history.pop(), kernel_history.pop(), output_size=size_history.pop())
-        output = self.outer_cnn(output)
-        output = F.max_unpool1d(output, indices_history.pop(), kernel_history.pop(), output_size=size_history.pop())
-        output = self.inner_cnn(output).permute(0, 2, 1)
+        output = input
+        for cnn in self.cnn_blocks:
+            output = F.max_unpool1d(output, indices_history.pop(), kernel_history.pop(), output_size=size_history.pop())
+            output = cnn(output)
 
-        output = self.lin(output)
+        output = self.lin(output.permute(0, 2, 1))
 
         return output
 

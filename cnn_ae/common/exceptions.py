@@ -1,0 +1,2 @@
+class InconsistentPoolingLayersException(Exception):
+    pass

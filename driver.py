@@ -4,7 +4,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 import os
-from cnn_ae.models.denoising import CNNEncoder, CNNDecoder, CNNAE, DeepDSCNNEncoder, UpsamplingCNNDecoder
+from cnn_ae.models.denoising import CNNEncoder, CNNDecoder, CNNAE, DeepDSCNNEncoder, DeepUSCNNDecoder
 from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
@@ -37,15 +37,26 @@ if params.mode == 'train':
     train_iterator = BucketIterator(train, 64, sort_key=lambda x: len(x.text), device=device)
     test_iterator = BucketIterator(test, 64, sort_key=lambda x: len(x.text), device=device)
 
-    enc = DeepDSCNNEncoder(len(ds.fields['text'].vocab), 300, num_inner_conv=2)
-    dec = UpsamplingCNNDecoder(len(ds.fields['text'].vocab), 300, 1024, 3)
+    kcn = [
+        (3, 200, 2),
+        (3, 400, 2),
+        (3, 800, 2),
+    ]
+    pooling_ks = [
+        (2, 2),
+        (2, 2),
+        (-1, 1)
+    ]
+
+    enc = DeepDSCNNEncoder(len(ds.fields['text'].vocab), 200, kcn, pooling_ks)
+    dec = DeepUSCNNDecoder(len(ds.fields['text'].vocab), 200, 1024, list(reversed(kcn)))
     model = CNNAE(enc, dec).to(device)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
     elif params.load_from == 'end':
         model.load_state_dict(torch.load(params.model_end))
 
-    optimizer = optim.Adam(model.parameters(), lr=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
     trainer = DenoisingCNN(model, optimizer, ds.fields['text'].vocab.stoi['<pad>'], train_iterator, test_iterator, params.max_iter, params.model_best, params.model_end, device)
     trainer.train(end_epoch_callback=callback)
