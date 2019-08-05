@@ -6,9 +6,12 @@ from cnn_ae.utils.noise import noise_char_input
 
 class DenoisingCNN(object):
 
-    def __init__(self, model, optimizer, pad_idx, train_iter, test_iter, max_epoch, model_best_filename, model_end_filename, device):
+    def __init__(self, model, optimizer, train_iter, test_iter, max_epoch, model_best_filename, model_end_filename, device, pad_idx=None):
         self.model = model
-        self.criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
+        if pad_idx:
+            self.criterion = nn.CrossEntropyLoss(ignore_index=pad_idx)
+        else:
+            self.criterion = nn.CrossEntropyLoss()
         self.optimizer = optimizer
         self.max_epoch = max_epoch
         self.train_iter = train_iter
