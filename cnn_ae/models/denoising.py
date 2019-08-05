@@ -6,6 +6,72 @@ import cnn_ae.utils.factory as factory
 from cnn_ae.common.exceptions import InconsistentPoolingLayersException
 
 
+class ShallowDSCNNEncoder(nn.Module):
+
+    def __init__(self, vocab_size, emb_size, kernels_channels):
+        super(ShallowDSCNNEncoder, self).__init__()
+        self.vocab_size = vocab_size
+        self.emb_size = emb_size
+
+        self.emb = nn.Embedding(vocab_size, emb_size)
+        self.cnn_blocks = nn.ModuleList()
+        for kernel, channel in kernels_channels:
+            self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channel, 1, kernel, padding=0))
+
+    def get_cnn_weights(self):
+        return [cnn[0].weight for cnn in self.cnn_blocks]
+
+    def forward(self, input):
+        indices_history = []
+        size_history = []
+        max_pooled = []
+        embedded = self.emb(input).permute(0, 2, 1)
+        for cnn in self.cnn_blocks:
+            output = cnn(embedded)
+            size_history.append(output.size())
+            output, indices = F.max_pool1d(output, kernel_size=output.shape[-1], return_indices=True)
+            max_pooled.append(output)
+            indices_history.append(indices)
+        return max_pooled, size_history, indices_history, embedded.size()
+
+
+class ShallowUSCNNDecoder(nn.Module):
+
+    def __init__(self, vocab_size, emb_size, hid_size, kernels_channels, device):
+        super(ShallowUSCNNDecoder, self).__init__()
+        self.vocab_size = vocab_size
+        self.emb_size = emb_size
+        self.device = device
+
+        self.cnn_blocks = nn.ModuleList()
+        for kernel, channel in kernels_channels:
+            self.cnn_blocks.append(factory.build_cnn1d_block(channel, emb_size, 1, kernel, transposed=True, padding=0))
+
+        self.lin = nn.Sequential(
+            nn.Linear(emb_size, hid_size),
+            nn.Dropout(),
+            nn.Linear(hid_size, hid_size),
+            nn.Dropout(),
+            nn.Linear(hid_size, vocab_size)
+        )
+
+    def tie_weights(self, encoder_weights):
+        for cnn, tied_weight in zip(self.cnn_blocks, encoder_weights):
+            cnn.tied_weight = tied_weight
+
+    def forward(self, inputs, size_history, indices_history, embedded_size):
+
+        combined = torch.zeros(embedded_size, device=self.device)
+        for input, cnn, size, indices in zip(inputs, self.cnn_blocks, size_history, indices_history):
+            output = F.max_unpool1d(input, indices, size[-1], output_size=size)
+            output = cnn(output)
+            combined += output
+
+        output = self.lin(combined.permute(0, 2, 1))
+
+        return output
+
+
 class DeepDSCNNEncoder(nn.Module):
 
     def __init__(self, vocab_size, emb_size, layers_kcn, pooling_ks):
@@ -301,6 +367,6 @@ class CNNAE(nn.Module):
         self.dec = dec
 
     def forward(self, input):
-        encoded, size_history, indices_history, kernel_history = self.enc(input)
-        decoded = self.dec(encoded, size_history, indices_history, kernel_history)
+        max_pooled, size_history, indices_history, embedded_size = self.enc(input)
+        decoded = self.dec(max_pooled, size_history, indices_history, embedded_size)
         return decoded

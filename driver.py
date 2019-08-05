@@ -4,11 +4,22 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 import os
-from cnn_ae.models.denoising import CNNEncoder, CNNDecoder, CNNAE, DeepDSCNNEncoder, DeepUSCNNDecoder
+from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder
 from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
+
+# data = torch.randint(1, 100000, [64, 200, 147]).float()
+# conv = nn.Conv1d(200, 1, 3)
+# tconv = nn.ConvTranspose1d(1, 200, 3)
+# tconv.weight = conv.weight
+#
+# output = conv(data)
+# s = output.size()
+# output, indices = F.max_pool1d(output, kernel_size=output.shape[-1], return_indices=True)
+# output = F.max_unpool1d(output, indices, s[-1], output_size=s)
+# output = tconv(output)
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -37,19 +48,30 @@ if params.mode == 'train':
     train_iterator = BucketIterator(train, 64, sort_key=lambda x: len(x.text), device=device)
     test_iterator = BucketIterator(test, 64, sort_key=lambda x: len(x.text), device=device)
 
-    kcn = [
-        (3, 200, 2),
-        (3, 400, 2),
-        (3, 800, 2),
-    ]
-    pooling_ks = [
-        (2, 2),
-        (2, 2),
-        (-1, 1)
+    # kcn = [
+    #     (5, 400, 3),
+    #     (5, 400, 3),
+    #     (5, 400, 3),
+    #     (5, 400, 3)
+    # ]
+    # pooling_ks = [
+    #     (2, 2),
+    #     (2, 2),
+    #     (2, 2),
+    #     (-1, 1)
+    # ]
+
+    kernel_channels = [
+        (3, 200),
+        (4, 200),
+        (5, 200),
+        (6, 200),
+        (7, 200)
     ]
 
-    enc = DeepDSCNNEncoder(len(ds.fields['text'].vocab), 200, kcn, pooling_ks)
-    dec = DeepUSCNNDecoder(len(ds.fields['text'].vocab), 200, 1024, list(reversed(kcn)))
+    enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
+    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 1024, kernel_channels, device)
+    dec.tie_weights(enc.get_cnn_weights())
     model = CNNAE(enc, dec).to(device)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
