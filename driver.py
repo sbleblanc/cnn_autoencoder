@@ -82,5 +82,5 @@ if params.mode == 'train':
 
     #ds.fields['text'].vocab.stoi['<pad>']
     trainer = DenoisingCNN(model, optimizer, train_iterator, test_iterator, params.max_iter, params.model_best, params.model_end, device)
-    trainer.train(end_epoch_callback=callback)
+    trainer.train(noise_ratio=params.noise_ratio, end_epoch_callback=callback)
 
