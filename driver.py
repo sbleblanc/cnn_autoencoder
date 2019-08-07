@@ -9,6 +9,7 @@ from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
+from cnn_ae.utils.noise import noise_char_input
 
 # data = torch.randint(1, 100000, [64, 200, 147]).float()
 # conv = nn.Conv1d(200, 1, 3)
@@ -45,8 +46,8 @@ if params.mode == 'train':
     else:
         callback = None
 
-    train_iterator = BucketIterator(train, 64, sort_key=lambda x: len(x.text), device=device)
-    test_iterator = BucketIterator(test, 64, sort_key=lambda x: len(x.text), device=device)
+    train_iterator = BucketIterator(train, 128, sort_key=lambda x: len(x.text), device=device)
+    test_iterator = BucketIterator(test, 128, sort_key=lambda x: len(x.text), device=device)
 
     # kcn = [
     #     (5, 400, 3),
@@ -70,7 +71,7 @@ if params.mode == 'train':
     ]
 
     enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
-    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 1024, kernel_channels, device)
+    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 2048, kernel_channels, device)
     dec.tie_weights(enc.get_cnn_weights())
     model = CNNAE(enc, dec).to(device)
     if params.load_from == 'best':

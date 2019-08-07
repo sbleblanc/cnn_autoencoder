@@ -6,6 +6,108 @@ import cnn_ae.utils.factory as factory
 from cnn_ae.common.exceptions import InconsistentPoolingLayersException
 
 
+class DeepMOTDSCNNEncoder(nn.Module):
+
+    def __init__(self, vocab_size, emb_size, hid_size, z_size, kernels_channels):
+        super(DeepMOTDSCNNEncoder, self).__init__()
+        self.vocab_size = vocab_size
+        self.emb_size = emb_size
+
+        self.emb = nn.Embedding(vocab_size, emb_size)
+
+        lin_input_size = 0
+        self.cnn_blocks = nn.ModuleList()
+        for kernel, channel in kernels_channels:
+            self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channel, 1, kernel, padding=0))
+            lin_input_size += channel
+
+        self.lin = nn.Sequential(
+            nn.Linear(lin_input_size, hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(hid_size, hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(hid_size, z_size)
+        )
+
+    def get_cnn_weights(self):
+        return [cnn[0].weight for cnn in self.cnn_blocks]
+
+    def forward(self, input):
+        indices_history = []
+        size_history = []
+        max_pooled = []
+        embedded = self.emb(input).permute(0, 2, 1)
+        for cnn in self.cnn_blocks:
+            output = cnn(embedded)
+            size_history.append(output.size())
+            output, indices = F.max_pool1d(output, kernel_size=output.shape[-1], return_indices=True)
+            max_pooled.append(output)
+            indices_history.append(indices)
+        combined = torch.cat(max_pooled, dim=1).squeeze(2)
+        output = self.lin(combined)
+        return output, size_history, indices_history, embedded.size()
+
+class DeepMOTUSCNNDecoder(nn.Module):
+
+    def __init__(self, vocab_size, emb_size, z_size, us_hid_size, fc_hid_size, kernels_channels, device):
+        super(DeepMOTUSCNNDecoder, self).__init__()
+        self.vocab_size = vocab_size
+        self.emb_size = emb_size
+        self.kernels_channels = kernels_channels
+        self.device = device
+
+        lin_input_size = 0
+        self.cnn_blocks = nn.ModuleList()
+        for kernel, channel in kernels_channels:
+            self.cnn_blocks.append(factory.build_cnn1d_block(channel, emb_size, 1, kernel, transposed=True, padding=0))
+            lin_input_size += channel
+
+        self.z_lin = nn.Sequential(
+            nn.Linear(z_size, us_hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(us_hid_size, us_hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(us_hid_size, lin_input_size)
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(emb_size, fc_hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(fc_hid_size, fc_hid_size),
+            nn.ReLU(),
+            nn.Dropout(),
+            nn.Linear(fc_hid_size, vocab_size)
+        )
+
+    def tie_weights(self, encoder_weights):
+        for cnn, tied_weight in zip(self.cnn_blocks, encoder_weights):
+            cnn.tied_weight = tied_weight
+
+    def forward(self, input, size_history, indices_history, embedded_size):
+
+        output = self.z_lin(input)
+
+        outputs = []
+        current_index = 0
+        for _, channels in self.kernels_channels:
+            outputs.append(output[:, current_index:current_index + channels].unsqueeze(2))
+            current_index += channels
+
+        combined = torch.zeros(embedded_size, device=self.device)
+        for input, cnn, size, indices in zip(outputs, self.cnn_blocks, size_history, indices_history):
+            output = F.max_unpool1d(input, indices, size[-1], output_size=size)
+            output = cnn(output)
+            combined += output
+
+        output = self.fc(combined.permute(0, 2, 1))
+
+        return output
+
 class ShallowDSCNNEncoder(nn.Module):
 
     def __init__(self, vocab_size, emb_size, kernels_channels):
@@ -49,8 +151,10 @@ class ShallowUSCNNDecoder(nn.Module):
 
         self.lin = nn.Sequential(
             nn.Linear(emb_size, hid_size),
+            nn.ReLU(),
             nn.Dropout(),
             nn.Linear(hid_size, hid_size),
+            nn.ReLU(),
             nn.Dropout(),
             nn.Linear(hid_size, vocab_size)
         )

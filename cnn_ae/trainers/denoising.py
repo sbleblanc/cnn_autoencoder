@@ -46,8 +46,8 @@ class DenoisingCNN(object):
             if end_epoch_callback:
                 end_epoch_callback(self.model)
 
-            epoch_train_loss = epoch_train_loss
-            epoch_test_loss = epoch_test_loss
+            epoch_train_loss = epoch_train_loss / len(self.train_iter)
+            epoch_test_loss = epoch_test_loss / len(self.test_iter)
 
             if epoch_test_loss < best:
                 best = epoch_test_loss
