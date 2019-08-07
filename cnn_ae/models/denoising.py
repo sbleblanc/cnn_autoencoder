@@ -110,7 +110,7 @@ class DeepMOTUSCNNDecoder(nn.Module):
 
 class ShallowDSCNNEncoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, kernels_channels):
+    def __init__(self, vocab_size, emb_size, kernels_channels, num_conv=1):
         super(ShallowDSCNNEncoder, self).__init__()
         self.vocab_size = vocab_size
         self.emb_size = emb_size
@@ -118,7 +118,7 @@ class ShallowDSCNNEncoder(nn.Module):
         self.emb = nn.Embedding(vocab_size, emb_size)
         self.cnn_blocks = nn.ModuleList()
         for kernel, channel in kernels_channels:
-            self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channel, 1, kernel, padding=0))
+            self.cnn_blocks.append(factory.build_cnn1d_block(emb_size, channel, num_conv, kernel, padding=0))
 
     def get_cnn_weights(self):
         return [cnn[0].weight for cnn in self.cnn_blocks]
@@ -139,7 +139,7 @@ class ShallowDSCNNEncoder(nn.Module):
 
 class ShallowUSCNNDecoder(nn.Module):
 
-    def __init__(self, vocab_size, emb_size, hid_size, kernels_channels, device):
+    def __init__(self, vocab_size, emb_size, hid_size, kernels_channels, device, num_conv=1):
         super(ShallowUSCNNDecoder, self).__init__()
         self.vocab_size = vocab_size
         self.emb_size = emb_size
@@ -147,7 +147,7 @@ class ShallowUSCNNDecoder(nn.Module):
 
         self.cnn_blocks = nn.ModuleList()
         for kernel, channel in kernels_channels:
-            self.cnn_blocks.append(factory.build_cnn1d_block(channel, emb_size, 1, kernel, transposed=True, padding=0))
+            self.cnn_blocks.append(factory.build_cnn1d_block(channel, emb_size, num_conv, kernel, transposed=True, padding=0))
 
         self.lin = nn.Sequential(
             nn.Linear(emb_size, hid_size),
