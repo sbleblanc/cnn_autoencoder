@@ -35,7 +35,7 @@ parser.add_argument('--noise-ratio', action='store', default=0.0, type=float)
 params = parser.parse_args()
 
 if params.mode == 'train':
-    ds = AutoencodingDataset(params.dataset, params.topk)
+    ds = AutoencodingDataset(params.dataset, params.topk, add_init_eos=False)
     train, test = ds.split()
     if params.manual_examples:
         with open(params.manual_examples, 'r') as in_file:
