@@ -7,8 +7,12 @@ def tokenize(text):
 
 class AutoencodingDataset(Dataset):
 
-    def __init__(self, dataset_fn, top_k=None, min_len=7, **kwargs):
-        fields = [('text', Field(sequential=True, use_vocab=True, tokenize=tokenize))]
+    def __init__(self, dataset_fn, top_k=None, min_len=7, add_init_eos=True, **kwargs):
+        if add_init_eos:
+            fields = [('text', Field(sequential=True, use_vocab=True, tokenize=tokenize, init_token='<START>',
+                                     eos_token='<END>'))]
+        else:
+            fields = [('text', Field(sequential=True, use_vocab=True, tokenize=tokenize))]
         examples = []
         counter = 0
         with open(dataset_fn, 'r') as in_file:
@@ -28,7 +32,9 @@ class AutoencodingDataset(Dataset):
         for w in s.split(' '):
             char_list.extend(list(w))
             char_list.append('<S>')
-        tensor_data = [self.fields['text'].vocab.stoi[c] for c in char_list[:-1]]
+        tensor_data = [self.fields['text'].vocab.stoi['<START>']]
+        tensor_data.extend([self.fields['text'].vocab.stoi[c] for c in char_list[:-1]])
+        tensor_data.append(self.fields['text'].vocab.stoi['<END>'])
         tensor_data.extend([self.fields['text'].vocab.stoi['<pad>'] for _ in range(n_pad)])
         return torch.tensor(tensor_data).unsqueeze(0)
 

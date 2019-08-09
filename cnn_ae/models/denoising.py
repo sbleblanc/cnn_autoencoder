@@ -1,9 +1,55 @@
+import random
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import cnn_ae.utils.factory as factory
 from cnn_ae.common.exceptions import InconsistentPoolingLayersException
+from cnn_ae.models.common import batch_attention
+
+class RNNDecoder(nn.Module):
+
+    def __init__(self, vocab_size, emb_size, hid_size, filter_size, proj_size, device, tf_ratio=0.5):
+        super(RNNDecoder, self).__init__()
+        self.vocab_size = vocab_size
+        self.hid_size = hid_size
+        self.combined_input_size = emb_size + proj_size
+        self.tf_ratio = tf_ratio
+        self.device = device
+
+        self.q_proj = nn.Linear(hid_size, proj_size, False)
+        self.k_proj = nn.Linear(filter_size, proj_size, False)
+        self.v_proj = nn.Linear(filter_size, proj_size, False)
+
+        self.emb = nn.Embedding(vocab_size, emb_size)
+        self.rnn = nn.GRU(input_size=self.combined_input_size,
+                           hidden_size=hid_size,
+                           num_layers=1,
+                           batch_first=True)
+        self.out = nn.Linear(hid_size + proj_size + emb_size, vocab_size)
+
+    def tie_embedding(self, weigths):
+        self.emb.weight = weigths
+
+    def forward(self, input, target, encoder_filters, teacher_forcing_ratio=0.5):
+        max_len = target.shape[-1]
+        outputs = torch.zeros([input.shape[0], max_len, self.vocab_size], device=self.device)
+        outputs[:, 0, :] = input
+        hidden = torch.zeros([1, input.shape[0], self.hid_size], device=self.device)
+        combined_filters = torch.cat(encoder_filters, dim=2).permute(0, 2, 1)
+        for i in range(1, max_len):
+            embedded = self.emb(input)
+            attention = batch_attention(self.q_proj(hidden.permute(1, 0, 2)),
+                                        self.k_proj(combined_filters),
+                                        self.v_proj(combined_filters))
+            combined_input = torch.cat([embedded, attention], dim=2)
+            output, hidden = self.rnn(combined_input, hidden)
+            outputs[:, i, :] = self.out(torch.cat([output, attention, embedded], dim=2)).squeeze(1)
+            if random.random() < teacher_forcing_ratio:
+                input = target[:, i].unsqueeze(1)
+            else:
+                input = outputs[:, i, :].max(1)[1].unsqueeze(1)
+        return outputs
 
 
 class DeepMOTDSCNNEncoder(nn.Module):
@@ -48,6 +94,7 @@ class DeepMOTDSCNNEncoder(nn.Module):
         combined = torch.cat(max_pooled, dim=1).squeeze(2)
         output = self.lin(combined)
         return output, size_history, indices_history, embedded.size()
+
 
 class DeepMOTUSCNNDecoder(nn.Module):
 
@@ -107,6 +154,7 @@ class DeepMOTUSCNNDecoder(nn.Module):
         output = self.fc(combined.permute(0, 2, 1))
 
         return output
+
 
 class ShallowDSCNNEncoder(nn.Module):
 
@@ -473,4 +521,21 @@ class CNNAE(nn.Module):
     def forward(self, input):
         max_pooled, size_history, indices_history, embedded_size = self.enc(input)
         decoded = self.dec(max_pooled, size_history, indices_history, embedded_size)
+        return decoded
+
+
+class CNNRNNAE(nn.Module):
+
+    def __init__(self, enc: ShallowDSCNNEncoder, dec: RNNDecoder, init_idx: int, teacher_forcing_ratio, device):
+        super(CNNRNNAE, self).__init__()
+        self.enc = enc
+        self.dec = dec
+        self.init_idx = init_idx
+        self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.device = device
+
+    def forward(self, input):
+        max_pooled, _, _, _ = self.enc(input)
+        input_init = torch.tensor([[self.init_idx]]).repeat(input.shape[0], 1).to(self.device)
+        decoded = self.dec(input_init, input, max_pooled, self.teacher_forcing_ratio)
         return decoded

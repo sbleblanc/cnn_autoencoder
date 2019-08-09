@@ -4,14 +4,13 @@ import torch.optim as optim
 import torch.nn.functional as F
 import argparse
 import os
-from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder
+from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder, RNNDecoder, CNNRNNAE
 from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
-from cnn_ae.utils.noise import noise_char_input
+from cnn_ae.models.common import batch_attention
 
-# data = torch.randint(1, 100000, [64, 200, 147]).float()
 # conv = nn.Conv1d(200, 1, 3)
 # tconv = nn.ConvTranspose1d(1, 200, 3)
 # tconv.weight = conv.weight
@@ -70,10 +69,14 @@ if params.mode == 'train':
         (7, 200)
     ]
 
+    # enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
+    # dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 2048, kernel_channels, device)
+    # dec.tie_weights(enc.get_cnn_weights())
+    # model = CNNAE(enc, dec).to(device)
     enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
-    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 2048, kernel_channels, device)
-    dec.tie_weights(enc.get_cnn_weights())
-    model = CNNAE(enc, dec).to(device)
+    dec = RNNDecoder(len(ds.fields['text'].vocab), 200, 1024, 200, 1024, device)
+    dec.tie_embedding(enc.emb.weight)
+    model = CNNRNNAE(enc, dec, ds.fields['text'].vocab.stoi['<START>'], 0.3, device).to(device)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
     elif params.load_from == 'end':
