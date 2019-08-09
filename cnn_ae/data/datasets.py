@@ -27,7 +27,7 @@ class AutoencodingDataset(Dataset):
         super(AutoencodingDataset, self).__init__(examples, fields, **kwargs)
         fields[0][1].build_vocab(self)
 
-    def __string_to_tensor(self, s, n_pad):
+    def __string_to_tensor_rnn(self, s, n_pad):
         char_list = []
         for w in s.split(' '):
             char_list.extend(list(w))
@@ -35,6 +35,15 @@ class AutoencodingDataset(Dataset):
         tensor_data = [self.fields['text'].vocab.stoi['<START>']]
         tensor_data.extend([self.fields['text'].vocab.stoi[c] for c in char_list[:-1]])
         tensor_data.append(self.fields['text'].vocab.stoi['<END>'])
+        tensor_data.extend([self.fields['text'].vocab.stoi['<pad>'] for _ in range(n_pad)])
+        return torch.tensor(tensor_data).unsqueeze(0)
+
+    def __string_to_tensor(self, s, n_pad):
+        char_list = []
+        for w in s.split(' '):
+            char_list.extend(list(w))
+            char_list.append('<S>')
+        tensor_data = [self.fields['text'].vocab.stoi[c] for c in char_list[:-1]]
         tensor_data.extend([self.fields['text'].vocab.stoi['<pad>'] for _ in range(n_pad)])
         return torch.tensor(tensor_data).unsqueeze(0)
 
