@@ -68,8 +68,8 @@ if params.mode == 'train':
         (7, 200)
     ]
 
-    enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
-    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 2048, kernel_channels, device)
+    enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels, 2)
+    dec = ShallowUSCNNDecoder(len(ds.fields['text'].vocab), 200, 2048, kernel_channels, device, 2)
     dec.tie_weights(enc.get_cnn_weights())
     model = CNNAE(enc, dec).to(device)
     # enc = ShallowDSCNNEncoder(len(ds.fields['text'].vocab), 200, kernel_channels)
