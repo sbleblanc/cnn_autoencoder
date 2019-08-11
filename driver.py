@@ -9,6 +9,7 @@ from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
+from python_utilities.utils.utils_fn import print_kv_box
 
 # conv = nn.Conv1d(200, 1, 3)
 # tconv = nn.ConvTranspose1d(1, 200, 3)
@@ -33,6 +34,21 @@ parser.add_argument('--manual-examples', action='store', default=None, type=str)
 parser.add_argument('--max-iter', action='store', default=1000, type=int)
 parser.add_argument('--noise-ratio', action='store', default=0.0, type=float)
 params = parser.parse_args()
+
+kvs = [
+    ('Mode', params.mode),
+    ('Dataset', params.dataset),
+    ('Model (Best)', params.model_best),
+    ('Model (End)', params.model_end),
+    ('Examples', params.manual_examples),
+    ('Load From', params.load_from),
+    ('Top k', params.topk),
+    ('Max Iter.', params.max_iter),
+    ('Noise Ratio', params.noise_ratio),
+    ('Device', device),
+]
+
+print_kv_box('Current Configuration', kvs)
 
 if params.mode == 'train':
     ds = AutoencodingDataset(params.dataset, params.topk, add_init_eos=False)
