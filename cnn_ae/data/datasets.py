@@ -4,7 +4,6 @@ from torchtext.data import Dataset, Field, Example
 def tokenize(text):
     return text.split(' ')
 
-
 class AutoencodingDataset(Dataset):
 
     def __init__(self, dataset_fn, top_k=None, min_len=7, add_init_eos=True, **kwargs):

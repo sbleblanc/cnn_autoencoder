@@ -25,3 +25,12 @@ def noise_char_input(data, ratio=0.01):
     flipped_buffer[tuple(to_flip.t())] = data[tuple(to_flip_offset.t())]
     flipped_buffer[tuple(to_flip_offset.t())] = data[tuple(to_flip.t())]
     return flipped_buffer
+
+
+def binary_noise_char_input(data, valid_replacement_values, ratio):
+    corrupt_buffer = data.clone()
+    to_corrupt = (torch.zeros(data.size()).uniform_() < ratio).nonzero()
+    replace_indices = torch.randint(0, len(valid_replacement_values), (to_corrupt.shape[0], ))
+    corrupt_buffer[tuple(to_corrupt.t())] = valid_replacement_values[replace_indices]
+    return corrupt_buffer
+

@@ -9,7 +9,11 @@ from cnn_ae.data.datasets import AutoencodingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
+from torchtext.data.field import Field
+from torchtext.datasets.language_modeling import LanguageModelingDataset
+from cnn_ae.data.iterators import NoisedWindowIterator
 from python_utilities.utils.utils_fn import print_kv_box
+from cnn_ae.models.window import MLP
 
 # conv = nn.Conv1d(200, 1, 3)
 # tconv = nn.ConvTranspose1d(1, 200, 3)
@@ -50,7 +54,28 @@ kvs = [
 
 print_kv_box('Current Configuration', kvs)
 
-if params.mode == 'train':
+
+def tokenize(string):
+    char_string = []
+    for w in string.split(' '):
+        char_string.extend(list(w))
+        char_string.append('<_>')
+    if not string.endswith(' '):
+        char_string.pop(-1)
+    return char_string
+
+
+if params.mode == 'debug':
+    model = MLP(51, 27, 1024, 3)
+    text_field = Field(tokenize=tokenize, batch_first=True)
+    ds = LanguageModelingDataset(params.dataset, text_field, newline_eos=False)
+    text_field.build_vocab(ds)
+    model = MLP(51, len(text_field.vocab), 1024, 3)
+    iterator = NoisedWindowIterator(ds, 64, 51, 0.1)
+    for b in iterator:
+        output = model(b.noised)
+
+elif params.mode == 'train':
     ds = AutoencodingDataset(params.dataset, params.topk, add_init_eos=False)
     train, test = ds.split()
     if params.manual_examples:
