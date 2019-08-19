@@ -1,3 +1,5 @@
+
+
 class ManualTestingCallback(object):
 
     def __init__(self, dataset, test_strings, device):
@@ -12,3 +14,5 @@ class ManualTestingCallback(object):
         for i, s in enumerate(strings):
             print('{} -> {}'.format(self.test_strings[i], s))
         print()
+
+

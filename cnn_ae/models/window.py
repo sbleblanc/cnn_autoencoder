@@ -23,8 +23,6 @@ class MLP(nn.Module):
             ))
         self.lin.add_module('output', nn.Linear(hid_size, vocab_size))
 
-    def forward(self, input):
-        mid = input.shape[1] // 2
-        holed_input = torch.cat([input[:, 0:mid], input[:, mid+1:input.shape[1]]], dim=1)
-        oh_encoded = self.oh(holed_input).view(input.shape[0], -1)
+    def forward(self, noised):
+        oh_encoded = self.oh(noised).view(noised.shape[0], -1)
         return self.lin(oh_encoded)

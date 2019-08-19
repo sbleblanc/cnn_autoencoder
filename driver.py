@@ -5,30 +5,21 @@ import torch.nn.functional as F
 import argparse
 import os
 from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder, RNNDecoder, CNNRNNAE
-from cnn_ae.data.datasets import AutoencodingDataset
+from cnn_ae.models.window import MLP
+from cnn_ae.trainers.window import WindowCorrectionTrainer
+from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback
 from torchtext.data.iterator import BucketIterator
 from torchtext.data.field import Field
-from torchtext.datasets.language_modeling import LanguageModelingDataset
-from cnn_ae.data.iterators import NoisedWindowIterator
+from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
 from python_utilities.utils.utils_fn import print_kv_box
-from cnn_ae.models.window import MLP
-
-# conv = nn.Conv1d(200, 1, 3)
-# tconv = nn.ConvTranspose1d(1, 200, 3)
-# tconv.weight = conv.weight
-#
-# output = conv(data)
-# s = output.size()
-# output, indices = F.max_pool1d(output, kernel_size=output.shape[-1], return_indices=True)
-# output = F.max_unpool1d(output, indices, s[-1], output_size=s)
-# output = tconv(output)
+from cnn_ae.utils.tokenize import tokenize_to_char
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 parser = argparse.ArgumentParser(description='CNN character auto encoding')
-parser.add_argument('--mode', action='store', choices=['train', 'debug'], required=True, type=str)
+parser.add_argument('--mode', action='store', choices=['train', 'train_predict', 'debug'], required=True, type=str)
 parser.add_argument('--dataset', action='store', type=str)
 parser.add_argument('--topk', action='store', default=None, type=int)
 parser.add_argument('--model-best', action='store', type=str)
@@ -55,25 +46,43 @@ kvs = [
 print_kv_box('Current Configuration', kvs)
 
 
-def tokenize(string):
-    char_string = []
-    for w in string.split(' '):
-        char_string.extend(list(w))
-        char_string.append('<_>')
-    if not string.endswith(' '):
-        char_string.pop(-1)
-    return char_string
-
-
 if params.mode == 'debug':
     model = MLP(51, 27, 1024, 3)
     text_field = Field(tokenize=tokenize, batch_first=True)
-    ds = LanguageModelingDataset(params.dataset, text_field, newline_eos=False)
+    ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
     text_field.build_vocab(ds)
+    train, test = ds.split()
     model = MLP(51, len(text_field.vocab), 1024, 3)
-    iterator = NoisedWindowIterator(ds, 64, 51, 0.1)
+    iterator = PredictMiddleNoisedWindowIterator(ds, 64, 51, 0.1, 1)
     for b in iterator:
-        output = model(b.noised)
+        output = model(b.noised, b.clean)
+
+elif params.mode == 'train_predict':
+    text_field = Field(tokenize=tokenize_to_char, batch_first=True)
+    ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
+    text_field.build_vocab(ds)
+    train_ds, test_ds = ds.split()
+
+    batch_size = 32
+    window_size = 101
+    middle_width = 1
+
+    train_iterator = PredictMiddleNoisedWindowIterator(train_ds, batch_size, window_size, params.noise_ratio,
+                                                       middle_width, device=device)
+    test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, 0.0, middle_width,
+                                                      device=device)
+
+    model = MLP(window_size, len(text_field.vocab), 2048, 6).to(device)
+    optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
+    if params.load_from == 'best':
+        model.load_state_dict(torch.load(params.model_best))
+    elif params.load_from == 'end':
+        model.load_state_dict(torch.load(params.model_end))
+
+    trainer = WindowCorrectionTrainer(model, optimizer, train_iterator, test_iterator, params.max_iter,
+                                      params.model_best, params.model_end, device)
+    trainer.train()
+
 
 elif params.mode == 'train':
     ds = AutoencodingDataset(params.dataset, params.topk, add_init_eos=False)

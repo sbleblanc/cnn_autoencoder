@@ -1,5 +1,6 @@
 import torch
 from torchtext.data import Dataset, Field, Example
+from torchtext.datasets.language_modeling import LanguageModelingDataset
 
 def tokenize(text):
     return text.split(' ')
@@ -67,3 +68,19 @@ class AutoencodingDataset(Dataset):
                 chars.append(self.fields['text'].vocab.itos[batch[i, j]])
             strings.append(''.join(chars).replace('<S>', " "))
         return strings
+
+
+class SplittableLanguageModelingDataset(LanguageModelingDataset):
+
+    def split(self, split_ratio=0.7, stratified=False, strata_field='label',
+              random_state=None):
+        if stratified or random_state:
+            raise NotImplemented()
+
+        text = self.examples[0].text
+        train_len = int(len(text) * split_ratio)
+        fields = ('text', self.fields['text'])
+        train_example = [Example.fromlist([text[0:train_len]], [fields])]
+        test_example = [Example.fromlist([text[train_len:]], [fields])]
+
+        return Dataset(train_example, self.fields), Dataset(test_example, self.fields)
