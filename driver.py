@@ -82,7 +82,7 @@ elif params.mode == 'train_predict':
         model.load_state_dict(torch.load(params.model_end))
 
     kvs = [
-        ('Dataset Length', len(ds.examples[0])),
+        ('Dataset Length', len(ds.examples[0].text)),
         ('Batch Size', batch_size),
         ('Window Size', window_size),
         ('Num. Train Batches', len(train_iterator)),
