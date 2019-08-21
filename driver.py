@@ -14,7 +14,7 @@ from torchtext.data.iterator import BucketIterator
 from torchtext.data.field import Field
 from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
 from python_utilities.utils.utils_fn import print_kv_box
-from cnn_ae.utils.tokenize import tokenize_to_char
+from cnn_ae.utils.tokenize import WordToCharTokenizer
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -47,23 +47,25 @@ print_kv_box('Current Configuration', kvs)
 
 
 if params.mode == 'debug':
-    model = MLP(51, 27, 1024, 3)
-    text_field = Field(tokenize=tokenize, batch_first=True)
-    ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
-    text_field.build_vocab(ds)
-    train, test = ds.split()
-    model = MLP(51, len(text_field.vocab), 1024, 3)
-    iterator = PredictMiddleNoisedWindowIterator(ds, 64, 51, 0.1, 1)
-    for b in iterator:
-        output = model(b.noised, b.clean)
+    pass
+    # model = MLP(51, 27, 1024, 3)
+    # text_field = Field(tokenize=tokenize, batch_first=True)
+    # ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
+    # text_field.build_vocab(ds)
+    # train, test = ds.split()
+    # model = MLP(51, len(text_field.vocab), 1024, 3)
+    # iterator = PredictMiddleNoisedWindowIterator(ds, 64, 51, 0.1, 1)
+    # for b in iterator:
+    #     output = model(b.noised, b.clean)
 
 elif params.mode == 'train_predict':
-    text_field = Field(tokenize=tokenize_to_char, batch_first=True)
+    tokenizer = WordToCharTokenizer()
+    text_field = Field(tokenize=tokenizer, batch_first=True)
     ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
     text_field.build_vocab(ds)
     train_ds, test_ds = ds.split()
 
-    batch_size = 32
+    batch_size = 64
     window_size = 101
     middle_width = 1
 
@@ -72,7 +74,7 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, 0.0, middle_width,
                                                       device=device)
 
-    model = MLP(window_size, len(text_field.vocab), 2048, 6).to(device)
+    model = MLP(window_size, len(text_field.vocab), 2048, 4).to(device)
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
