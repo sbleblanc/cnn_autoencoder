@@ -29,7 +29,8 @@ class WindowCorrectionTrainer(object):
             self.model.train()
             for i, batch in enumerate(self.train_iter):
                 num_batches = len(self.train_iter)
-                print_progress_bar(i + 1, num_batches, 'Processing Train batch {} of {}'.format(i+1, num_batches))
+                if i % 100 == 0:
+                    print_progress_bar(i + 1, num_batches, 'Processing Train batch {} of {}'.format(i+1, num_batches))
                 self.optimizer.zero_grad()
                 output = self.model(batch.noised)
                 loss = self.criterion(output.view(-1, output.shape[-1]), batch.clean.contiguous().view(-1))
@@ -40,19 +41,25 @@ class WindowCorrectionTrainer(object):
                     accuracy_elem_count += len(((output.argmax(dim=1) - batch.clean.squeeze(1)) == 0).nonzero())
                     accuracy_total_count += batch.noised.shape[0]
             epoch_train_accuracy = accuracy_elem_count / accuracy_total_count * 100
+            if i % 100:
+                print_progress_bar(i + 1, num_batches, 'Processing Train batch {} of {}'.format(i + 1, num_batches))
 
             self.model.eval()
             accuracy_elem_count = 0.
             accuracy_total_count = 0
             for i, batch in enumerate(self.test_iter):
                 num_batches = len(self.test_iter)
-                print_progress_bar(i + 1, num_batches, 'Processing Test/Valid batch {} of {}'.format(i + 1, num_batches))
+                if i % 100 == 0:
+                    print_progress_bar(i + 1, num_batches, 'Processing Test/Valid batch {} of {}'.format(i + 1, num_batches))
                 output = self.model(batch.noised)
                 loss = self.criterion(output.view(-1, output.shape[-1]), batch.clean.contiguous().view(-1))
                 epoch_test_loss += loss.item()
                 accuracy_elem_count += len(((output.argmax(dim=1) - batch.clean.squeeze(1)) == 0).nonzero())
                 accuracy_total_count += batch.noised.shape[0]
             epoch_test_accuracy = accuracy_elem_count / accuracy_total_count * 100
+            if i % 100:
+                print_progress_bar(i + 1, num_batches,
+                                   'Processing Test/Valid batch {} of {}'.format(i + 1, num_batches))
 
             if end_epoch_callback:
                 end_epoch_callback(self.model)
