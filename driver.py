@@ -84,7 +84,7 @@ elif params.mode == 'train_predict':
     kvs = [
         ('Dataset Length', len(ds)),
         ('Batch Size', batch_size),
-        ('Window Size', window_size)
+        ('Window Size', window_size),
         ('Num. Train Batches', len(train_iterator)),
         ('Num. Test Batches', len(train_iterator)),
     ]
