@@ -71,7 +71,7 @@ elif params.mode == 'train_predict':
 
     train_iterator = PredictMiddleNoisedWindowIterator(train_ds, batch_size, window_size, params.noise_ratio,
                                                        middle_width, device=device)
-    test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, 0.0, middle_width,
+    test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
     model = MLP(window_size, len(text_field.vocab), 2048, 4).to(device)
