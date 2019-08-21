@@ -72,6 +72,24 @@ class AutoencodingDataset(Dataset):
 
 class SplittableLanguageModelingDataset(LanguageModelingDataset):
 
+    def __init__(self, path, text_field, newline_eos=True,
+                 encoding='utf-8', topk=float('inf'), **kwargs):
+        fields = [('text', text_field)]
+        text = []
+        with io.open(path, encoding=encoding) as f:
+            line_counter = 0
+            for line in f:
+                text += text_field.preprocess(line)
+                if newline_eos:
+                    text.append(u'<eos>')
+                line_counter += 1
+                if line_counter >= topk:
+                    break
+
+        examples = [Example.fromlist([text], fields)]
+        super(LanguageModelingDataset, self).__init__(
+            examples, fields, **kwargs)
+
     def split(self, split_ratio=0.7, stratified=False, strata_field='label',
               random_state=None):
         if stratified or random_state:

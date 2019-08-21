@@ -21,7 +21,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 parser = argparse.ArgumentParser(description='CNN character auto encoding')
 parser.add_argument('--mode', action='store', choices=['train', 'train_predict', 'debug'], required=True, type=str)
 parser.add_argument('--dataset', action='store', type=str)
-parser.add_argument('--topk', action='store', default=None, type=int)
+parser.add_argument('--topk', action='store', default=float('inf'), type=int)
 parser.add_argument('--model-best', action='store', type=str)
 parser.add_argument('--model-end', action='store', default=None, type=str)
 parser.add_argument('--load-from', action='store', choices=['none', 'best', 'end'], default='none', type=str)
@@ -61,7 +61,7 @@ if params.mode == 'debug':
 elif params.mode == 'train_predict':
     tokenizer = WordToCharTokenizer()
     text_field = Field(tokenize=tokenizer, batch_first=True)
-    ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
+    ds = SplittableLanguageModelingDataset(params.dataset, text_field, topk=params.topk, newline_eos=False)
     text_field.build_vocab(ds)
     train_ds, test_ds = ds.split()
 
