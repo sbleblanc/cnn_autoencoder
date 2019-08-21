@@ -81,6 +81,16 @@ elif params.mode == 'train_predict':
     elif params.load_from == 'end':
         model.load_state_dict(torch.load(params.model_end))
 
+    kvs = [
+        ('Dataset Length', len(ds)),
+        ('Batch Size', batch_size),
+        ('Window Size', window_size)
+        ('Num. Train Batches', len(train_iterator)),
+        ('Num. Test Batches', len(train_iterator)),
+    ]
+
+    print_kv_box('Pre-training stats', kvs)
+
     trainer = WindowCorrectionTrainer(model, optimizer, train_iterator, test_iterator, params.max_iter,
                                       params.model_best, params.model_end, device)
     trainer.train()

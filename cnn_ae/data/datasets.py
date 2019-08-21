@@ -76,7 +76,7 @@ class SplittableLanguageModelingDataset(LanguageModelingDataset):
                  encoding='utf-8', topk=float('inf'), **kwargs):
         fields = [('text', text_field)]
         text = []
-        with io.open(path, encoding=encoding) as f:
+        with open(path, encoding=encoding) as f:
             line_counter = 0
             for line in f:
                 text += text_field.preprocess(line)
