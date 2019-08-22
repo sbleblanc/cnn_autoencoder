@@ -47,7 +47,7 @@ class WindowCorrectionTrainer(object):
                     accuracy_total_count += batch.noised.shape[0]
             epoch_train_accuracy = accuracy_elem_count / accuracy_total_count * 100
             epoch_train_loss = epoch_train_loss / len(self.train_iter)
-            if i % 100:
+            if i % 1000:
                 print_progress_bar(i + 1, num_batches,
                                    '[{}/{}] Train loss={}, Train Acc.={:.2f}\n'.format(i + 1, num_batches,
                                                                                        epoch_train_loss,
@@ -72,7 +72,7 @@ class WindowCorrectionTrainer(object):
                 accuracy_total_count += batch.noised.shape[0]
             epoch_test_accuracy = accuracy_elem_count / accuracy_total_count * 100
             epoch_test_loss = epoch_test_loss / len(self.test_iter)
-            if i % 100:
+            if i % 1000:
                 print_progress_bar(i + 1, num_batches,
                                    '[{}/{}] Test loss={}, Test Acc.={:.2f}\n'.format(i + 1, num_batches,
                                                                                      epoch_test_loss,
