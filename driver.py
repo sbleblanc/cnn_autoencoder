@@ -65,8 +65,8 @@ elif params.mode == 'train_predict':
     text_field.build_vocab(ds)
     train_ds, test_ds = ds.split()
 
-    batch_size = 64
-    window_size = 101
+    batch_size = 128
+    window_size = 51
     middle_width = 1
 
     train_iterator = PredictMiddleNoisedWindowIterator(train_ds, batch_size, window_size, params.noise_ratio,
@@ -74,7 +74,7 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
-    model = MLP(window_size, len(text_field.vocab), 2048, 4).to(device)
+    model = MLP(window_size, len(text_field.vocab), 2048, 6).to(device)
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
