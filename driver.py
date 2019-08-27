@@ -28,20 +28,14 @@ parser.add_argument('--load-from', action='store', choices=['none', 'best', 'end
 parser.add_argument('--manual-examples', action='store', default=None, type=str)
 parser.add_argument('--max-iter', action='store', default=1000, type=int)
 parser.add_argument('--noise-ratio', action='store', default=0.0, type=float)
+parser.add_argument('--batch-size', action='store', default=128, type=int)
+parser.add_argument('--window-size', action='store', default=51, type=int)
+parser.add_argument('--hidden-size', action='store', default=512, type=int)
+parser.add_argument('--depth', action='store', default=1, type=int)
 params = parser.parse_args()
 
-kvs = [
-    ('Mode', params.mode),
-    ('Dataset', params.dataset),
-    ('Model (Best)', params.model_best),
-    ('Model (End)', params.model_end),
-    ('Examples', params.manual_examples),
-    ('Load From', params.load_from),
-    ('Top k', params.topk),
-    ('Max Iter.', params.max_iter),
-    ('Noise Ratio', params.noise_ratio),
-    ('Device', device),
-]
+kvs = [(k, v) for k, v in vars(params).items()]
+kvs.append(('Device', device))
 
 print_kv_box('Current Configuration', kvs)
 
@@ -65,8 +59,8 @@ elif params.mode == 'train_predict':
     text_field.build_vocab(ds)
     train_ds, test_ds = ds.split()
 
-    batch_size = 64
-    window_size = 51
+    batch_size = params.batch_size
+    window_size = params.window_size
     middle_width = 1
 
     train_iterator = PredictMiddleNoisedWindowIterator(train_ds, batch_size, window_size, params.noise_ratio,
@@ -74,7 +68,7 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
-    model = MLP(window_size, len(text_field.vocab), 8192, 2).to(device)
+    model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth).to(device)
     optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
