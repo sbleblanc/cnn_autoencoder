@@ -15,6 +15,7 @@ from torchtext.data.field import Field
 from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
 from python_utilities.utils.utils_fn import print_kv_box
 from cnn_ae.utils.tokenize import WordToCharTokenizer
+from cnn_ae.common.enums import Regularization
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
@@ -32,6 +33,10 @@ parser.add_argument('--batch-size', action='store', default=128, type=int)
 parser.add_argument('--window-size', action='store', default=51, type=int)
 parser.add_argument('--hidden-size', action='store', default=512, type=int)
 parser.add_argument('--depth', action='store', default=1, type=int)
+parser.add_argument('--regularization', action='store', choices=['DROPOUT', 'BN_RELU', 'RELU_BN'], default='DROPOUT',
+                    type=str)
+parser.add_argument('--dropout', action='store', default=0.5, type=float)
+parser.add_argument('--wd', action='store', default=1e-4, type=float)
 params = parser.parse_args()
 
 kvs = [(k, v) for k, v in vars(params).items()]
@@ -68,8 +73,9 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
-    model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth).to(device)
-    optimizer = optim.Adam(model.parameters(), weight_decay=1e-4)
+    model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,
+                regularization=Regularization[params.regularization]).to(device)
+    optimizer = optim.Adam(model.parameters(), weight_decay=params.wd)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))
     elif params.load_from == 'end':
@@ -80,7 +86,7 @@ elif params.mode == 'train_predict':
         ('Batch Size', batch_size),
         ('Window Size', window_size),
         ('Num. Train Batches', len(train_iterator)),
-        ('Num. Test Batches', len(train_iterator)),
+        ('Num. Test Batches', len(test_iterator)),
     ]
 
     print_kv_box('Pre-training stats', kvs)
