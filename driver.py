@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import argparse
 import os
 from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder, RNNDecoder, CNNRNNAE
-from cnn_ae.models.window import MLP
+from cnn_ae.models.window import MLP, CNN
 from cnn_ae.trainers.window import WindowCorrectionTrainer
 from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
@@ -73,8 +73,9 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
-    model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,
-                regularization=Regularization[params.regularization]).to(device)
+    model = CNN(window_size, len(text_field.vocab), 2).to(device)
+    # model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,
+    #             regularization=Regularization[params.regularization]).to(device)
     optimizer = optim.Adam(model.parameters(), weight_decay=params.wd)
     if params.load_from == 'best':
         model.load_state_dict(torch.load(params.model_best))

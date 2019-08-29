@@ -1,6 +1,8 @@
 import torch.nn as nn
+from cnn_ae.common.enums import Regularization
 
-def build_cnn1d_block(input_channels, output_channels, n_conv_layers, kernel_size, transposed=False, padding=None, norm_before_activation=True, forward=True):
+def build_cnn1d_block(input_channels, output_channels, n_conv_layers, kernel_size, transposed=False, padding=None,
+                      norm_before_activation=True, forward=True):
     block = nn.Sequential()
     if padding is None:
         padding = (kernel_size - 1) // 2
@@ -25,3 +27,21 @@ def build_cnn1d_block(input_channels, output_channels, n_conv_layers, kernel_siz
             block.add_module('b_norm_{}'.format(i), nn.BatchNorm1d(cnn_output))
 
     return block
+
+
+def build_regularized_relu_block(reg: Regularization, dropout:float = 0.5, num_elem:int = 0):
+    if reg == Regularization.DROPOUT:
+        return nn.Sequential(
+            nn.Dropout(p=dropout),
+            nn.ReLU()
+        )
+    elif reg == Regularization.BN_RELU:
+        return nn.Sequential(
+            nn.BatchNorm1d(num_elem),
+            nn.ReLU()
+        )
+    elif reg == Regularization.RELU_BN:
+        return nn.Sequential(
+            nn.ReLU(),
+            nn.BatchNorm1d(num_elem)
+        )
