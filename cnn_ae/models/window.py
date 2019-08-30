@@ -58,7 +58,9 @@ class CNN(nn.Module):
                     in_channels=last_output_size,
                     out_channels=out_channels,
                     kernel_size=current_section.getint('kernel_size', 3),
-                    padding=current_section.getint('padding', 1)
+                    padding=current_section.getint('padding', 1),
+                    stride=current_section.getint('stride', 1),
+                    dilation=current_section.getint('dilation', 1),
                 ))
                 temp_block.add_module('ReLU Block', build_regularized_relu_block(
                     reg=Regularization[current_section.get('reg', 'RELU_BN')],
