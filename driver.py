@@ -37,6 +37,7 @@ parser.add_argument('--regularization', action='store', choices=['DROPOUT', 'BN_
                     type=str)
 parser.add_argument('--dropout', action='store', default=0.5, type=float)
 parser.add_argument('--wd', action='store', default=1e-4, type=float)
+parser.add_argument('--model-conf', action='store', default=None, type=str)
 params = parser.parse_args()
 
 kvs = [(k, v) for k, v in vars(params).items()]
@@ -73,7 +74,10 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
-    model = CNN(window_size, len(text_field.vocab), 2).to(device)
+    if params.model_conf:
+        model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
+    else:
+        model = CNN(window_size, len(text_field.vocab), 2).to(device)
     # model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,
     #             regularization=Regularization[params.regularization]).to(device)
     optimizer = optim.Adam(model.parameters(), weight_decay=params.wd)
