@@ -73,10 +73,10 @@ class CNN(nn.Module):
                 'pooling') or current_section_name.startswith('res'):
             if current_section_name.startswith('res'):
                 inner_block = nn.Sequential()
-                arch = ResArchitecture[current_section_values.pop('format', "ORIGINAL")]
+                arch = ResArchitecture[current_section_values.pop('format', "FULL_INNER")]
                 use_projection = current_section_values.pop('use_projection', False)
                 initial_channel = last_output_size
-                for inner_block_name, inner_block_values in current_section_values.items():
+                for i, (inner_block_name, inner_block_values) in enumerate(current_section_values.items()):
                     out_channels = inner_block_values.get('output_channel', 50)
                     temp_block = nn.Sequential()
                     temp_cnn = nn.Conv1d(
@@ -89,15 +89,21 @@ class CNN(nn.Module):
                     )
                     if arch == ResArchitecture.FULL_PA:
                         temp_reg = build_regularized_relu_block(
-                            reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
+                            reg=Regularization[inner_block_values.get('reg', 'BN_RELU')],
                             num_elem=last_output_size
                         )
                     else:
                         temp_reg = build_regularized_relu_block(
-                            reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
+                            reg=Regularization[inner_block_values.get('reg', 'BN_RELU')],
                             num_elem=out_channels
                         )
-                    if arch == ResArchitecture.ORIGINAL:
+                    if arch == ResArchitecture.SPLIT_LAST :
+                        temp_block.add_module('Convolution', temp_cnn)
+                        if i == len(current_section_values.items()) - 1:
+                            temp_block.add_module('ReLU Block', temp_reg[0])
+                        else:
+                            temp_block.add_module('ReLU Block', temp_reg)
+                    elif arch == ResArchitecture.FULL_INNER:
                         temp_block.add_module('Convolution', temp_cnn)
                         temp_block.add_module('ReLU Block', temp_reg)
                     elif arch == ResArchitecture.FULL_PA:
@@ -106,9 +112,16 @@ class CNN(nn.Module):
                     inner_block.add_module(inner_block_name, temp_block)
                     last_output_size = out_channels
                     current_lin = get_expected_conv_1d_lout(current_lin, temp_cnn)
-                model.cnn.add_module(current_section_name, ResBlock(inner_block, use_projection=use_projection,
-                                                                    source_size=initial_channel,
-                                                                    target_size=last_output_size))
+                if arch == ResArchitecture.SPLIT_LAST:
+                    model.cnn.add_module(current_section_name, nn.Sequential(
+                        ResBlock(inner_block, use_projection=use_projection, source_size=initial_channel,
+                                 target_size=last_output_size),
+                        nn.ReLU()
+                    ))
+                else:
+                    model.cnn.add_module(current_section_name, ResBlock(inner_block, use_projection=use_projection,
+                                                                        source_size=initial_channel,
+                                                                        target_size=last_output_size))
 
             if current_section_name.startswith('cnn'):
                 out_channels = current_section_values.get('output_channel', 50)

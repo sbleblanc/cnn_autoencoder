@@ -8,8 +8,6 @@ class Regularization(Enum):
     RELU_BN = 3
 
 class ResArchitecture(Enum):
-    ORIGINAL = 0
-    BN_ADD = 1
-    RELU_ADD = 2
-    RELU_PA = 3
-    FULL_PA = 4
+    SPLIT_LAST = 0
+    FULL_INNER = 1
+    FULL_PA = 2
