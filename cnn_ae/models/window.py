@@ -1,10 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from cnn_ae.common.enums import Regularization
+from cnn_ae.common.enums import Regularization, ResArchitecture
 from cnn_ae.utils.factory import build_regularized_relu_block
 from cnn_ae.utils.math import get_expected_conv_1d_lout, get_expected_mp_1d_lout
-import configparser
+from collections import OrderedDict
+import toml
 
 class MLP(nn.Module):
 
@@ -33,57 +34,104 @@ class MLP(nn.Module):
         return self.lin(oh_encoded)
 
 
+class ResBlock(nn.Module):
+
+    def __init__(self, inner_network: nn.Module, use_projection: bool = False, source_size: int = 0,
+                 target_size: int = 0):
+        super(ResBlock, self).__init__()
+        self.inner_network = inner_network
+        self.use_projection = use_projection
+        if use_projection:
+            self.proj = nn.Linear(source_size, target_size, bias=False)
+
+    def forward(self, input):
+        identity = input
+        output = self.inner_network(input)
+        if self.use_projection:
+            return output + self.proj(identity.permute(0, 2, 1)).permute(0, 2, 1)
+        else:
+            return output + identity
+
+
 class CNN(nn.Module):
 
     @classmethod
     def from_conf(cls, conf_fn: str, window_size: int, vocab_size: int):
         window_size -= 1
         model = cls(window_size, vocab_size, 0, False)
-        model_conf = configparser.ConfigParser()
-        model_conf.read(conf_fn)
-        section_iter = iter(model_conf.sections())
+        model_conf = toml.load(conf_fn, _dict=OrderedDict)
+        section_iter = iter(model_conf.items())
 
-        current_section = model_conf[next(section_iter)]
-        model.emb = nn.Embedding(vocab_size, current_section.getint('emb_size', 1))
+        current_section_name, current_section_values = next(section_iter)
+        model.emb = nn.Embedding(vocab_size, current_section_values.get('emb_size', 1))
 
         model.cnn = nn.Sequential()
-        current_section = model_conf[next(section_iter)]
+        current_section_name, current_section_values = next(section_iter)
         last_output_size = model.emb.embedding_dim
         current_lin = window_size
-        while current_section.name.startswith('CNN') or current_section.name.startswith('Pooling'):
-            if current_section.name.startswith('CNN'):
-                out_channels = current_section.getint('output_channel', 50)
+        while current_section_name.startswith('cnn') or current_section_name.startswith(
+                'pooling') or current_section_name.startswith('res'):
+            if current_section_name.startswith('res'):
+                inner_block = nn.Sequential()
+                arch = ResArchitecture[current_section_values.pop('format', "ORIGINAL")]
+                use_projection = current_section_values.pop('use_projection', False)
+                initial_channel = last_output_size
+                for inner_block_name, inner_block_values in current_section_values.items():
+                    out_channels = inner_block_values.get('output_channel', 50)
+                    temp_block = nn.Sequential()
+                    temp_block.add_module('Convolution', nn.Conv1d(
+                        in_channels=last_output_size,
+                        out_channels=out_channels,
+                        kernel_size=inner_block_values.get('kernel_size', 3),
+                        padding=inner_block_values.get('padding', 1),
+                        stride=inner_block_values.get('stride', 1),
+                        dilation=inner_block_values.get('dilation', 1),
+                    ))
+                    temp_block.add_module('ReLU Block', build_regularized_relu_block(
+                        reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
+                        num_elem=out_channels
+                    ))
+                    inner_block.add_module(inner_block_name, temp_block)
+                    last_output_size = out_channels
+                    current_lin = get_expected_conv_1d_lout(current_lin, temp_block[0])
+                model.cnn.add_module(current_section_name, ResBlock(inner_block, use_projection=use_projection,
+                                                                    source_size=initial_channel,
+                                                                    target_size=last_output_size))
+
+            if current_section_name.startswith('cnn'):
+                out_channels = current_section_values.get('output_channel', 50)
                 temp_block = nn.Sequential()
                 temp_block.add_module('Convolution', nn.Conv1d(
                     in_channels=last_output_size,
                     out_channels=out_channels,
-                    kernel_size=current_section.getint('kernel_size', 3),
-                    padding=current_section.getint('padding', 1),
-                    stride=current_section.getint('stride', 1),
-                    dilation=current_section.getint('dilation', 1),
+                    kernel_size=current_section_values.get('kernel_size', 3),
+                    padding=current_section_values.get('padding', 1),
+                    stride=current_section_values.get('stride', 1),
+                    dilation=current_section_values.get('dilation', 1),
                 ))
                 temp_block.add_module('ReLU Block', build_regularized_relu_block(
-                    reg=Regularization[current_section.get('reg', 'RELU_BN')],
+                    reg=Regularization[current_section_values.get('reg', 'RELU_BN')],
                     num_elem=out_channels
                 ))
-                model.cnn.add_module(current_section.name, temp_block)
+                model.cnn.add_module(current_section_name, temp_block)
                 last_output_size = out_channels
                 current_lin = get_expected_conv_1d_lout(current_lin, temp_block[0])
-            else:
-                model.cnn.add_module(current_section.name, nn.MaxPool1d(
-                    kernel_size=current_section.getint('kernel_size', 2),
-                    stride=current_section.getint('stride', 2)
+
+            if current_section_name.startswith('pool'):
+                model.cnn.add_module(current_section_name, nn.MaxPool1d(
+                    kernel_size=current_section_values.get('kernel_size', 2),
+                    stride=current_section_values.get('stride', 2)
                 ))
                 current_lin = get_expected_mp_1d_lout(current_lin, model.cnn[-1])
 
-            current_section = model_conf[next(section_iter)]
+            current_section_name, current_section_values = next(section_iter)
 
         last_output_size = last_output_size * current_lin
         model.fc = nn.Sequential()
         while True:
-            reg = Regularization[current_section.get('reg', "NONE")]
+            reg = Regularization[current_section_values.get('reg', "NONE")]
 
-            out_size = current_section.getint('output_size', 512)
+            out_size = current_section_values.get('output_size', 512)
             if out_size == -1:
                 out_size = vocab_size
 
@@ -95,14 +143,14 @@ class CNN(nn.Module):
             if reg != Regularization.NONE:
                 temp_block.add_module('ReLU Block', build_regularized_relu_block(
                     reg=reg,
-                    dropout=current_section.getfloat('dropout', 0.0),
+                    dropout=current_section_values.get('dropout', 0.0),
                     num_elem=out_size
                 ))
-            model.fc.add_module(current_section.name, temp_block)
+            model.fc.add_module(current_section_name, temp_block)
             last_output_size = out_size
 
             try:
-                current_section = model_conf[next(section_iter)]
+                current_section_name, current_section_values = next(section_iter)
             except StopIteration:
                 break
 
