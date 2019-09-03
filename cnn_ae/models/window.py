@@ -79,18 +79,24 @@ class CNN(nn.Module):
                 for inner_block_name, inner_block_values in current_section_values.items():
                     out_channels = inner_block_values.get('output_channel', 50)
                     temp_block = nn.Sequential()
-                    temp_block.add_module('Convolution', nn.Conv1d(
+                    temp_cnn = nn.Conv1d(
                         in_channels=last_output_size,
                         out_channels=out_channels,
                         kernel_size=inner_block_values.get('kernel_size', 3),
                         padding=inner_block_values.get('padding', 1),
                         stride=inner_block_values.get('stride', 1),
                         dilation=inner_block_values.get('dilation', 1),
-                    ))
-                    temp_block.add_module('ReLU Block', build_regularized_relu_block(
+                    )
+                    temp_reg = build_regularized_relu_block(
                         reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
                         num_elem=out_channels
-                    ))
+                    )
+                    if arch == ResArchitecture.ORIGINAL:
+                        temp_block.add_module('Convolution', temp_cnn)
+                        temp_block.add_module('ReLU Block', temp_reg)
+                    elif arch == ResArchitecture.FULL_PA:
+                        temp_block.add_module('ReLU Block', temp_reg)
+                        temp_block.add_module('Convolution', temp_cnn)
                     inner_block.add_module(inner_block_name, temp_block)
                     last_output_size = out_channels
                     current_lin = get_expected_conv_1d_lout(current_lin, temp_block[0])
