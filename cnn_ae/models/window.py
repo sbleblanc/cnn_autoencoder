@@ -87,10 +87,16 @@ class CNN(nn.Module):
                         stride=inner_block_values.get('stride', 1),
                         dilation=inner_block_values.get('dilation', 1),
                     )
-                    temp_reg = build_regularized_relu_block(
-                        reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
-                        num_elem=out_channels
-                    )
+                    if arch == ResArchitecture.FULL_PA:
+                        temp_reg = build_regularized_relu_block(
+                            reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
+                            num_elem=last_output_size
+                        )
+                    else:
+                        temp_reg = build_regularized_relu_block(
+                            reg=Regularization[inner_block_values.get('reg', 'RELU_BN')],
+                            num_elem=out_channels
+                        )
                     if arch == ResArchitecture.ORIGINAL:
                         temp_block.add_module('Convolution', temp_cnn)
                         temp_block.add_module('ReLU Block', temp_reg)
