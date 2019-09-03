@@ -99,7 +99,7 @@ class CNN(nn.Module):
                         temp_block.add_module('Convolution', temp_cnn)
                     inner_block.add_module(inner_block_name, temp_block)
                     last_output_size = out_channels
-                    current_lin = get_expected_conv_1d_lout(current_lin, temp_block[0])
+                    current_lin = get_expected_conv_1d_lout(current_lin, temp_cnn)
                 model.cnn.add_module(current_section_name, ResBlock(inner_block, use_projection=use_projection,
                                                                     source_size=initial_channel,
                                                                     target_size=last_output_size))
