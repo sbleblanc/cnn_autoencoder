@@ -94,7 +94,7 @@ def build_from_toml_dict(values: OrderedDict, input_dim: int, final_dim: int = 1
                 out_features=output_size
             )
             if pre_activation_reg:
-                build_regularized_relu_block_(final_block, i, dropout=dropout, num_elem=output_size)
+                build_regularized_relu_block_(final_block, i, reg, dropout=dropout, num_elem=output_size)
                 final_block.add_module('{}_{}'.format(section_name, i), temp_fc)
             else:
                 final_block.add_module('{}_{}'.format(section_name, i), temp_fc)
