@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import argparse
 import os
 from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder, RNNDecoder, CNNRNNAE
-from cnn_ae.models.window import MLP, CNN
+from cnn_ae.models.window import MLP, CNN, ResMLP
 from cnn_ae.trainers.window import WindowCorrectionTrainer
 from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
@@ -75,7 +75,8 @@ elif params.mode == 'train_predict':
                                                       device=device)
 
     if params.model_conf:
-        model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
+        # model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
+        model = ResMLP(params.model_conf, window_size, len(text_field.vocab))
     else:
         model = CNN(window_size, len(text_field.vocab), 2).to(device)
     # model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,

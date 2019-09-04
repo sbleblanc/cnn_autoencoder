@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from cnn_ae.models.res import ResBlock
 from cnn_ae.common.enums import Regularization, ResArchitecture
-from cnn_ae.utils.factory import build_regularized_relu_block
+from cnn_ae.utils.factory import build_regularized_relu_block, build_from_toml_dict
 from cnn_ae.utils.math import get_expected_conv_1d_lout, get_expected_mp_1d_lout
 from collections import OrderedDict
 import toml
@@ -32,25 +33,6 @@ class MLP(nn.Module):
     def forward(self, noised):
         oh_encoded = self.oh(noised).view(noised.shape[0], -1)
         return self.lin(oh_encoded)
-
-
-class ResBlock(nn.Module):
-
-    def __init__(self, inner_network: nn.Module, use_projection: bool = False, source_size: int = 0,
-                 target_size: int = 0):
-        super(ResBlock, self).__init__()
-        self.inner_network = inner_network
-        self.use_projection = use_projection
-        if use_projection:
-            self.proj = nn.Linear(source_size, target_size, bias=False)
-
-    def forward(self, input):
-        identity = input
-        output = self.inner_network(input)
-        if self.use_projection:
-            return output + self.proj(identity.permute(0, 2, 1)).permute(0, 2, 1)
-        else:
-            return output + identity
 
 
 class CNN(nn.Module):
@@ -184,7 +166,7 @@ class CNN(nn.Module):
     def __init__(self, window_size: int, vocab_size: int, emb_size: int, default_build: bool = True):
         super(CNN, self).__init__()
 
-        if default_build:
+        if default_buid:
             output_channels = 100
 
             self.emb = nn.Embedding(vocab_size, emb_size)
@@ -221,5 +203,22 @@ class CNN(nn.Module):
         output = self.cnn(embedded)
         output = self.fc(output.view(input.shape[0], -1))
         return output
+
+
+class ResMLP(nn.Module):
+
+    def __init__(self, conf_fn: str, window_size: int, vocab_size: int,):
+        super(ResMLP, self).__init__()
+        model_conf = toml.load(conf_fn, _dict=OrderedDict)
+
+        self.oh = nn.Embedding.from_pretrained(torch.eye(vocab_size, dtype=torch.float))
+
+        self.lin, _ = build_from_toml_dict(model_conf, (window_size - 1) * vocab_size, vocab_size)
+
+    def forward(self, noised):
+        oh_encoded = self.oh(noised).view(noised.shape[0], -1)
+        return self.lin(oh_encoded)
+
+
 
 
