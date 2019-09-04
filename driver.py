@@ -76,7 +76,7 @@ elif params.mode == 'train_predict':
 
     if params.model_conf:
         # model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
-        model = ResMLP(params.model_conf, window_size, len(text_field.vocab))
+        model = ResMLP(params.model_conf, window_size, len(text_field.vocab)).to(device)
     else:
         model = CNN(window_size, len(text_field.vocab), 2).to(device)
     # model = MLP(window_size, len(text_field.vocab), params.hidden_size, params.depth, dropout=params.dropout,
