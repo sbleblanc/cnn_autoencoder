@@ -9,7 +9,7 @@ from cnn_ae.models.window import MLP, CNN, ResMLP
 from cnn_ae.trainers.window import WindowCorrectionTrainer
 from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
-from cnn_ae.trainers.callbacks import ManualTestingCallback
+from cnn_ae.trainers.callbacks import ManualTestingCallback, RandomWindowBatchDecodingCallback
 from torchtext.data.iterator import BucketIterator
 from torchtext.data.field import Field
 from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
@@ -74,6 +74,8 @@ elif params.mode == 'train_predict':
     test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
                                                       device=device)
 
+    callback = RandomWindowBatchDecodingCallback(test_iterator)
+
     if params.model_conf:
         # model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
         model = ResMLP(params.model_conf, window_size, len(text_field.vocab)).to(device)
@@ -99,7 +101,7 @@ elif params.mode == 'train_predict':
 
     trainer = WindowCorrectionTrainer(model, optimizer, train_iterator, test_iterator, params.max_iter,
                                       params.model_best, params.model_end, device)
-    trainer.train()
+    trainer.train(end_epoch_callback=callback)
 
 
 elif params.mode == 'train':

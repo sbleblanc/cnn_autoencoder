@@ -1,4 +1,4 @@
-
+from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
 
 class ManualTestingCallback(object):
 
@@ -16,3 +16,15 @@ class ManualTestingCallback(object):
         print()
 
 
+class RandomWindowBatchDecodingCallback(object):
+
+    def __init__(self, iterator: PredictMiddleNoisedWindowIterator):
+        self.iterator = iterator
+
+    def __call__(self, model):
+        random_batch = self.iterator.get_single_rnd_batch()
+        output = model(random_batch.noised).softmax(dim=1).argmax(dim=1)
+        buffer = ''.join(self.iterator.dataset.fields['text'].vocab.itos[c] for c in random_batch.clean.squeeze(1))
+        print('Reference: {}'.format(buffer))
+        buffer = ''.join(self.iterator.dataset.fields['text'].vocab.itos[c] for c in output)
+        print('Result: {}'.format(buffer))

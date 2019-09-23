@@ -79,7 +79,8 @@ class WindowCorrectionTrainer(object):
                                                                                      epoch_test_accuracy))
 
             if end_epoch_callback:
-                end_epoch_callback(self.model)
+                with torch.no_grad():
+                    end_epoch_callback(self.model)
 
             if epoch_test_loss < best:
                 best = epoch_test_loss
