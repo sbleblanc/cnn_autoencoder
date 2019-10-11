@@ -69,6 +69,41 @@ class AutoencodingDataset(Dataset):
             strings.append(''.join(chars).replace('<S>', " "))
         return strings
 
+class WindowExample(Example):
+
+    def __init__(self, ref_str, win_start: int, win_end: int):
+        self.ref_str = ref_str
+        self.win_start = win_start
+        self.win_end = win_end
+
+    @property
+    def text(self):
+        return self.ref_str[self.win_start:self.win_end]
+
+
+class RandomizedTextWindowDataset(Dataset):
+
+    def __init__(self, path, text_field, window_size, newline_eos=True,
+                 encoding='utf-8', topk=float('inf'), **kwargs):
+        fields = [('text', text_field)]
+        text = []
+        with open(path, encoding=encoding) as f:
+            line_counter = 0
+            for line in f:
+                text += text_field.preprocess(line)
+                if newline_eos:
+                    text.append(u'<eos>')
+                line_counter += 1
+                if line_counter >= topk:
+                    break
+
+        examples = []
+
+        for i in range(len(text) - window_size):
+            examples.append(WindowExample(text, i, i + window_size))
+
+        super(RandomizedTextWindowDataset, self).__init__(examples, fields, **kwargs)
+
 
 class SplittableLanguageModelingDataset(LanguageModelingDataset):
 

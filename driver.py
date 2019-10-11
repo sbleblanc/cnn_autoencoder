@@ -7,12 +7,12 @@ import os
 from cnn_ae.models.denoising import CNNAE, ShallowDSCNNEncoder, ShallowUSCNNDecoder, RNNDecoder, CNNRNNAE
 from cnn_ae.models.window import MLP, CNN, ResMLP
 from cnn_ae.trainers.window import WindowCorrectionTrainer
-from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset
+from cnn_ae.data.datasets import AutoencodingDataset, SplittableLanguageModelingDataset, RandomizedTextWindowDataset
 from cnn_ae.trainers.denoising import DenoisingCNN
 from cnn_ae.trainers.callbacks import ManualTestingCallback, RandomWindowBatchDecodingCallback
 from torchtext.data.iterator import BucketIterator
 from torchtext.data.field import Field
-from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator
+from cnn_ae.data.iterators import PredictMiddleNoisedWindowIterator, NoisedPreWindowedIterator
 from python_utilities.utils.utils_fn import print_kv_box
 from cnn_ae.utils.tokenize import WordToCharTokenizer
 from cnn_ae.common.enums import Regularization
@@ -47,7 +47,16 @@ print_kv_box('Current Configuration', kvs)
 
 
 if params.mode == 'debug':
-    pass
+    tokenizer = WordToCharTokenizer()
+    text_field = Field(tokenize=tokenizer, batch_first=True)
+    ds = RandomizedTextWindowDataset(params.dataset, text_field, params.window_size, topk=params.topk, newline_eos=False)
+    text_field.build_vocab(ds)
+    train_ds, test_ds = ds.split(0.8)
+    iterator = NoisedPreWindowedIterator(train_ds, params.batch_size, params.window_size, 0.0)
+    iterator = PredictMiddleNoisedWindowIterator(iterator, 1)
+    for b in iterator:
+        print(b)
+    i = 1
     # model = MLP(51, 27, 1024, 3)
     # text_field = Field(tokenize=tokenize, batch_first=True)
     # ds = SplittableLanguageModelingDataset(params.dataset, text_field, newline_eos=False)
@@ -61,20 +70,21 @@ if params.mode == 'debug':
 elif params.mode == 'train_predict':
     tokenizer = WordToCharTokenizer()
     text_field = Field(tokenize=tokenizer, batch_first=True)
-    ds = SplittableLanguageModelingDataset(params.dataset, text_field, topk=params.topk, newline_eos=False)
+    # ds = SplittableLanguageModelingDataset(params.dataset, text_field, topk=params.topk, newline_eos=False)
+    ds = RandomizedTextWindowDataset(params.dataset, text_field, params.window_size, topk=params.topk, newline_eos=False)
     text_field.build_vocab(ds)
-    train_ds, test_ds = ds.split()
+    train_ds, test_ds = ds.split(0.8)
 
     batch_size = params.batch_size
     window_size = params.window_size
     middle_width = 1
 
-    train_iterator = PredictMiddleNoisedWindowIterator(train_ds, batch_size, window_size, params.noise_ratio,
-                                                       middle_width, device=device)
-    test_iterator = PredictMiddleNoisedWindowIterator(test_ds, batch_size, window_size, params.noise_ratio, middle_width,
-                                                      device=device)
+    train_iterator = NoisedPreWindowedIterator(train_ds, batch_size, window_size, params.noise_ratio, device=device)
+    train_iterator = PredictMiddleNoisedWindowIterator(train_iterator, middle_width)
+    test_iterator = NoisedPreWindowedIterator(test_ds, batch_size, window_size, params.noise_ratio, device=device, shuffle=False)
+    test_iterator = PredictMiddleNoisedWindowIterator(test_iterator, middle_width)
 
-    callback = RandomWindowBatchDecodingCallback(test_iterator)
+    callback = None #RandomWindowBatchDecodingCallback(test_iterator)
 
     if params.model_conf:
         # model = CNN.from_conf(params.model_conf, window_size, len(text_field.vocab)).to(device)
