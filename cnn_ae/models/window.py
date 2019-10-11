@@ -45,7 +45,11 @@ class CNN(nn.Module):
         section_iter = iter(model_conf.items())
 
         current_section_name, current_section_values = next(section_iter)
-        model.emb = nn.Embedding(vocab_size, current_section_values.get('emb_size', 1))
+        emb_size = current_section_values.get('emb_size', 1)
+        if emb_size == 1:
+            model.emb = nn.Embedding.from_pretrained(torch.tensor([float(x + 1) for x in range(vocab_size)]).unsqueeze(1))
+        else:
+            model.emb = nn.Embedding(vocab_size, emb_size)
 
         model.cnn = nn.Sequential()
         current_section_name, current_section_values = next(section_iter)
@@ -166,7 +170,7 @@ class CNN(nn.Module):
     def __init__(self, window_size: int, vocab_size: int, emb_size: int, default_build: bool = True):
         super(CNN, self).__init__()
 
-        if default_buid:
+        if default_build:
             output_channels = 100
 
             self.emb = nn.Embedding(vocab_size, emb_size)
